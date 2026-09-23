@@ -34,6 +34,8 @@ class GameEngine(
 
     private var inputDirection: Direction = Direction.NONE
     private var pendingDig: Direction = Direction.NONE
+    private var runnerSpawnX: Int = 0
+    private var runnerSpawnY: Int = 0
 
     fun setInputDirection(direction: Direction) {
         inputDirection = direction
@@ -70,6 +72,8 @@ class GameEngine(
             )
         }
 
+        runnerSpawnX = level.runnerStartX
+        runnerSpawnY = level.runnerStartY
         val runner = Runner(
             x = level.runnerStartX.toFloat(),
             y = level.runnerStartY.toFloat()
@@ -107,10 +111,10 @@ class GameEngine(
     }
 
     private fun resetEntitiesToSpawn() {
-        val curLevel = state.levelNumber
+        // Respawn at the level's start position, not where the runner died
         state.runner.reset(
-            startX = state.runner.gridX,
-            startY = state.runner.gridY
+            startX = runnerSpawnX,
+            startY = runnerSpawnY
         )
         for (e in state.enemies) {
             e.reset()

@@ -114,7 +114,9 @@ fun GameScreen(
         levelManager.saveHighScore(engine.state.score)
     }
 
-    val state = engine.state
+    // Engine state isn't snapshot-observable: reading frameTick here makes this scope recompose
+    // every game step so the HUD and overlays pick up the latest engine.state.
+    val state = frameTick.let { engine.state }
 
     Box(
         modifier = modifier
@@ -231,7 +233,9 @@ fun GameScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         GameCanvas(
-                            gameState = state,
+                            // BoxWithConstraints content is its own recompose scope; read engine.state
+                            // here (alongside frameTick) rather than the captured outer value
+                            gameState = engine.state,
                             palette = palette,
                             tickCount = frameTick,
                             showCrtScanlines = showCrtScanlines
