@@ -19,7 +19,7 @@ data class LevelData(
          * Parses a 16-line ASCII string representation into LevelData.
          */
         fun fromAscii(id: Int, name: String, ascii: String): LevelData {
-            val lines = ascii.trimIndent().lines()
+            val lines = ascii.trimIndent().lines().filter { it.isNotBlank() }
             val grid = Array(ROWS) { IntArray(COLS) { TileType.EMPTY.id } }
             var runnerX = 14
             var runnerY = 14

@@ -3,6 +3,8 @@ package com.example.loderunner.game.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,20 +84,22 @@ fun MainMenuScreen(
                 onClose = { showCustomSelect = false }
             )
         } else {
+            val menuScroll = rememberScrollState()
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .background(palette.background)
                     .border(3.dp, palette.buttonBorder, RoundedCornerShape(16.dp))
-                    .padding(horizontal = 48.dp, vertical = 24.dp),
+                    .padding(horizontal = 36.dp, vertical = 12.dp)
+                    .verticalScroll(menuScroll),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Title Banner
                 Text(
                     text = "★ LODE RUNNER ★",
                     color = palette.gold,
-                    fontSize = 38.sp,
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = FontFamily.Monospace,
                     textAlign = TextAlign.Center
@@ -104,7 +108,7 @@ fun MainMenuScreen(
                 Text(
                     text = "1980s PC RETRO TABLET EDITION",
                     color = palette.hudText,
-                    fontSize = 14.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 2.sp
@@ -113,12 +117,12 @@ fun MainMenuScreen(
                 Text(
                     text = "HIGH SCORE: ${String.format("%06d", highScore)}",
                     color = palette.goldHighlight,
-                    fontSize = 16.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Menu Buttons
                 MenuButton(

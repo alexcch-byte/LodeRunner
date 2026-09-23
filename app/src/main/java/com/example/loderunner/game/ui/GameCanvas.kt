@@ -4,11 +4,16 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.example.loderunner.game.model.Direction
 import com.example.loderunner.game.model.DugHole
@@ -19,11 +24,15 @@ import com.example.loderunner.game.model.LevelData
 import com.example.loderunner.game.model.Runner
 import com.example.loderunner.game.model.TileType
 import com.example.loderunner.game.ui.theme.GamePalette
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun GameCanvas(
     gameState: GameState,
     palette: GamePalette,
+    tickCount: Long = 0L,
     showCrtScanlines: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -41,9 +50,17 @@ fun GameCanvas(
         val offsetX = (size.width - playfieldWidth) / 2f
         val offsetY = (size.height - playfieldHeight) / 2f
 
-        // 1. Draw Playfield Background
+        // 1. Draw Playfield Background with subtle ambient gradient
         drawRect(
-            color = palette.background,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    palette.background,
+                    Color(0xFF0D121D),
+                    palette.background
+                ),
+                startY = offsetY,
+                endY = offsetY + playfieldHeight
+            ),
             topLeft = Offset(offsetX, offsetY),
             size = Size(playfieldWidth, playfieldHeight)
         )
@@ -56,379 +73,637 @@ fun GameCanvas(
                 val tileLeft = offsetX + c * cellSize
                 val tileTop = offsetY + r * cellSize
 
-                drawTile(
+                drawEnhancedTile(
                     tile = tile,
                     left = tileLeft,
                     top = tileTop,
                     cellSize = cellSize,
                     palette = palette,
-                    escapeLaddersRevealed = gameState.escapeLaddersRevealed
+                    escapeLaddersRevealed = gameState.escapeLaddersRevealed,
+                    tickCount = tickCount
                 )
             }
         }
 
-        // 3. Draw Dug Holes (including crumbling / warning phase)
+        // 3. Draw Dug Holes
         for (hole in gameState.dugHoles) {
             val holeLeft = offsetX + hole.x * cellSize
             val holeTop = offsetY + hole.y * cellSize
-            drawDugHole(hole, holeLeft, holeTop, cellSize, palette, gameState.tickCount)
+            drawEnhancedDugHole(hole, holeLeft, holeTop, cellSize, palette, tickCount)
         }
 
-        // 4. Draw Enemies (Bungeling Guards)
+        // 4. Draw Bungeling Guards
         for (enemy in gameState.enemies) {
             if (!enemy.isDead) {
                 val enemyLeft = offsetX + enemy.x * cellSize
                 val enemyTop = offsetY + enemy.y * cellSize
-                drawEnemy(enemy, enemyLeft, enemyTop, cellSize, palette)
+                drawEnhancedEnemy(enemy, enemyLeft, enemyTop, cellSize, palette, tickCount)
             }
         }
 
-        // 5. Draw Player (Runner)
+        // 5. Draw Runner (Player)
         val runner = gameState.runner
         val runnerLeft = offsetX + runner.x * cellSize
         val runnerTop = offsetY + runner.y * cellSize
-        drawRunner(runner, runnerLeft, runnerTop, cellSize, palette)
+        drawEnhancedRunner(runner, runnerLeft, runnerTop, cellSize, palette, tickCount)
 
-        // 6. Draw CRT Scanlines (optional retro filter)
+        // 6. Draw CRT Scanlines & Screen Vignette
         if (showCrtScanlines) {
-            drawScanlines(offsetX, offsetY, playfieldWidth, playfieldHeight)
+            drawEnhancedCrtEffects(offsetX, offsetY, playfieldWidth, playfieldHeight)
         }
 
-        // 7. Draw Playfield Border
-        drawRect(
-            color = palette.buttonBorder.copy(alpha = 0.6f),
+        // 7. Outer Arcade Playfield Frame
+        drawRoundRect(
+            color = palette.buttonBorder.copy(alpha = 0.8f),
             topLeft = Offset(offsetX, offsetY),
             size = Size(playfieldWidth, playfieldHeight),
-            style = Stroke(width = 2f)
+            cornerRadius = CornerRadius(4f, 4f),
+            style = Stroke(width = 2.5f)
         )
     }
 }
 
-private fun DrawScope.drawTile(
+private fun DrawScope.drawEnhancedTile(
     tile: TileType,
     left: Float,
     top: Float,
     cellSize: Float,
     palette: GamePalette,
-    escapeLaddersRevealed: Boolean
+    escapeLaddersRevealed: Boolean,
+    tickCount: Long
 ) {
     when (tile) {
         TileType.BRICK -> {
-            // Authentic brick pattern: 3 rows of bricks with mortar lines
+            // Textured 3D Beveled Brick Platform
+            // Mortar background
             drawRect(
-                color = palette.brickMain,
+                color = palette.brickMortar,
                 topLeft = Offset(left, top),
                 size = Size(cellSize, cellSize)
             )
-            // Brick horizontal mortar lines
-            val rowH = cellSize / 3f
-            drawLine(
-                color = palette.brickMortar,
-                start = Offset(left, top + rowH),
-                end = Offset(left + cellSize, top + rowH),
-                strokeWidth = 1.5f
-            )
-            drawLine(
-                color = palette.brickMortar,
-                start = Offset(left, top + rowH * 2),
-                end = Offset(left + cellSize, top + rowH * 2),
-                strokeWidth = 1.5f
-            )
-            // Vertical mortar joints
-            drawLine(palette.brickMortar, Offset(left + cellSize * 0.5f, top), Offset(left + cellSize * 0.5f, top + rowH), 1.5f)
-            drawLine(palette.brickMortar, Offset(left + cellSize * 0.25f, top + rowH), Offset(left + cellSize * 0.25f, top + rowH * 2), 1.5f)
-            drawLine(palette.brickMortar, Offset(left + cellSize * 0.75f, top + rowH), Offset(left + cellSize * 0.75f, top + rowH * 2), 1.5f)
-            drawLine(palette.brickMortar, Offset(left + cellSize * 0.5f, top + rowH * 2), Offset(left + cellSize * 0.5f, top + cellSize), 1.5f)
 
-            // Top highlight
-            drawLine(palette.brickHighlight, Offset(left, top), Offset(left + cellSize, top), 1f)
+            val rowH = (cellSize - 3f) / 3f
+            val brickGap = 1.2f
+
+            // Row 1 (2 full bricks)
+            drawSingleBrick(left + 1f, top + 1f, (cellSize - 4f) / 2f, rowH, palette)
+            drawSingleBrick(left + (cellSize / 2f) + 1f, top + 1f, (cellSize - 4f) / 2f, rowH, palette)
+
+            // Row 2 (staggered: 1 half brick, 1 full, 1 half)
+            val halfW = (cellSize - 5f) / 4f
+            val fullW = (cellSize - 5f) / 2f
+            drawSingleBrick(left + 1f, top + rowH + brickGap + 1f, halfW, rowH, palette)
+            drawSingleBrick(left + halfW + brickGap + 1f, top + rowH + brickGap + 1f, fullW, rowH, palette)
+            drawSingleBrick(left + halfW + fullW + brickGap * 2 + 1f, top + rowH + brickGap + 1f, halfW, rowH, palette)
+
+            // Row 3 (2 full bricks)
+            drawSingleBrick(left + 1f, top + (rowH + brickGap) * 2 + 1f, (cellSize - 4f) / 2f, rowH, palette)
+            drawSingleBrick(left + (cellSize / 2f) + 1f, top + (rowH + brickGap) * 2 + 1f, (cellSize - 4f) / 2f, rowH, palette)
         }
 
         TileType.SOLID_ROCK -> {
-            // Indestructible stone
+            // Chiseled Bedrock / Megalith with 3D slate beveling
             drawRect(
-                color = palette.solidRockMain,
+                brush = Brush.linearGradient(
+                    colors = listOf(palette.solidRockHighlight, palette.solidRockMain, Color(0xFF181C30)),
+                    start = Offset(left, top),
+                    end = Offset(left + cellSize, top + cellSize)
+                ),
                 topLeft = Offset(left, top),
                 size = Size(cellSize, cellSize)
             )
-            // 3D beveled stone outline
-            drawLine(palette.solidRockHighlight, Offset(left, top), Offset(left + cellSize, top), 2f)
-            drawLine(palette.solidRockHighlight, Offset(left, top), Offset(left, top + cellSize), 2f)
-            drawLine(Color.Black.copy(alpha = 0.5f), Offset(left + cellSize, top), Offset(left + cellSize, top + cellSize), 2f)
-            drawLine(Color.Black.copy(alpha = 0.5f), Offset(left, top + cellSize), Offset(left + cellSize, top + cellSize), 2f)
-            // Inner stone pattern
+
+            // Inner chiseled border
             drawRect(
-                color = palette.solidRockHighlight.copy(alpha = 0.3f),
-                topLeft = Offset(left + cellSize * 0.2f, top + cellSize * 0.2f),
-                size = Size(cellSize * 0.6f, cellSize * 0.6f)
+                color = palette.solidRockHighlight.copy(alpha = 0.5f),
+                topLeft = Offset(left + 2f, top + 2f),
+                size = Size(cellSize - 4f, cellSize - 4f),
+                style = Stroke(width = 1.5f)
+            )
+
+            // Corner rivets
+            val rivetColor = Color(0xFFA0C0F0)
+            drawCircle(rivetColor, 1.2f, Offset(left + 4f, top + 4f))
+            drawCircle(rivetColor, 1.2f, Offset(left + cellSize - 4f, top + 4f))
+            drawCircle(rivetColor, 1.2f, Offset(left + 4f, top + cellSize - 4f))
+            drawCircle(rivetColor, 1.2f, Offset(left + cellSize - 4f, top + cellSize - 4f))
+
+            // Center stone texture motif
+            drawRect(
+                color = Color.Black.copy(alpha = 0.25f),
+                topLeft = Offset(left + cellSize * 0.35f, top + cellSize * 0.35f),
+                size = Size(cellSize * 0.3f, cellSize * 0.3f)
             )
         }
 
         TileType.LADDER -> {
-            drawLadder(left, top, cellSize, palette.ladder, palette.ladderRung)
+            drawEnhancedLadder(left, top, cellSize, palette.ladder, palette.ladderRung)
         }
 
         TileType.ESCAPE_LADDER -> {
             if (escapeLaddersRevealed) {
-                drawLadder(left, top, cellSize, palette.escapeLadder, palette.escapeLadder.copy(alpha = 0.8f))
+                // Pulsing glowing energy ladder
+                val pulse = (sin(tickCount * 0.15) * 0.3 + 0.7).toFloat()
+                val neonGlow = palette.escapeLadder.copy(alpha = pulse)
+                drawEnhancedLadder(left, top, cellSize, neonGlow, Color.White.copy(alpha = pulse))
+
+                // Aura glow
+                drawLine(
+                    color = neonGlow.copy(alpha = 0.3f),
+                    start = Offset(left + cellSize * 0.5f, top),
+                    end = Offset(left + cellSize * 0.5f, top + cellSize),
+                    strokeWidth = cellSize * 0.6f
+                )
             }
         }
 
         TileType.ROPE -> {
-            // Suspended hand-to-hand horizontal bar
+            // Braided Hand-to-Hand Suspension Bar
             val barY = top + cellSize * 0.3f
+
+            // Shadow under bar
+            drawLine(
+                color = Color.Black.copy(alpha = 0.5f),
+                start = Offset(left, barY + 2f),
+                end = Offset(left + cellSize, barY + 2f),
+                strokeWidth = 3f,
+                cap = StrokeCap.Round
+            )
+
+            // Main rope rail
             drawLine(
                 color = palette.rope,
                 start = Offset(left, barY),
                 end = Offset(left + cellSize, barY),
-                strokeWidth = 3f
+                strokeWidth = 3f,
+                cap = StrokeCap.Round
             )
-            // Notch / bar texture
+
+            // Top highlight rail
+            drawLine(
+                color = Color.White.copy(alpha = 0.6f),
+                start = Offset(left, barY - 1f),
+                end = Offset(left + cellSize, barY - 1f),
+                strokeWidth = 1f
+            )
+
+            // Metallic link brackets at center
             drawCircle(
-                color = Color.White.copy(alpha = 0.7f),
-                radius = 1.5f,
+                color = Color.White,
+                radius = 1.8f,
                 center = Offset(left + cellSize * 0.5f, barY)
             )
         }
 
         TileType.GOLD -> {
-            // Sparkling Gold Chest / Nugget
-            val goldW = cellSize * 0.65f
-            val goldH = cellSize * 0.5f
-            val gLeft = left + (cellSize - goldW) / 2f
-            val gTop = top + (cellSize - goldH) / 2f + cellSize * 0.15f
+            // 3D Treasure Chest with sparkling glint
+            val chestW = cellSize * 0.75f
+            val chestH = cellSize * 0.55f
+            val gLeft = left + (cellSize - chestW) / 2f
+            val gTop = top + (cellSize - chestH) / 2f + cellSize * 0.15f
 
-            // Golden Chest body
-            drawRect(
-                color = palette.gold,
+            // Chest drop shadow
+            drawRoundRect(
+                color = Color.Black.copy(alpha = 0.5f),
+                topLeft = Offset(gLeft + 1f, gTop + 2f),
+                size = Size(chestW, chestH),
+                cornerRadius = CornerRadius(3f, 3f)
+            )
+
+            // Chest Body (golden gradient)
+            drawRoundRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(palette.goldHighlight, palette.gold, Color(0xFFC08000)),
+                    startY = gTop,
+                    endY = gTop + chestH
+                ),
                 topLeft = Offset(gLeft, gTop),
-                size = Size(goldW, goldH)
+                size = Size(chestW, chestH),
+                cornerRadius = CornerRadius(3f, 3f)
             )
-            // Highlight band
-            drawRect(
-                color = palette.goldHighlight,
-                topLeft = Offset(gLeft + 2f, gTop + 2f),
-                size = Size(goldW - 4f, goldH * 0.35f)
-            )
-            // Clasp / lock
-            drawCircle(
-                color = Color(0xFF6B4500),
-                radius = goldW * 0.12f,
-                center = Offset(gLeft + goldW / 2f, gTop + goldH * 0.55f)
-            )
+
+            // Metallic iron rim / lock bands
+            val bandW = 2.5f
+            drawRect(Color(0xFF5A3000), Offset(gLeft + chestW * 0.25f, gTop), Size(bandW, chestH))
+            drawRect(Color(0xFF5A3000), Offset(gLeft + chestW * 0.75f - bandW, gTop), Size(bandW, chestH))
+
+            // Golden Keyhole Clasp
+            drawCircle(Color.White, 2f, Offset(gLeft + chestW / 2f, gTop + chestH * 0.5f))
+            drawCircle(Color.Black, 1.2f, Offset(gLeft + chestW / 2f, gTop + chestH * 0.5f))
+
+            // Periodic Animated Sparkle Glint
+            val sparklePhase = ((tickCount + (left * 17).toLong()) % 90).toInt()
+            if (sparklePhase in 0..12) {
+                val sparkleProgress = sparklePhase / 12f
+                val sparkleSize = (sin(sparkleProgress * PI) * 5f).toFloat()
+                val sparkleCenter = Offset(gLeft + chestW * 0.8f, gTop + chestH * 0.2f)
+
+                // 4-point star sparkle
+                drawLine(Color.White, Offset(sparkleCenter.x - sparkleSize, sparkleCenter.y), Offset(sparkleCenter.x + sparkleSize, sparkleCenter.y), 1.5f)
+                drawLine(Color.White, Offset(sparkleCenter.x, sparkleCenter.y - sparkleSize), Offset(sparkleCenter.x, sparkleCenter.y + sparkleSize), 1.5f)
+                drawCircle(Color.White, sparkleSize * 0.4f, sparkleCenter)
+            }
         }
 
         TileType.FALSE_BRICK -> {
-            // Looks like brick with faint crack
-            drawRect(palette.brickMain, Offset(left, top), Size(cellSize, cellSize))
-            drawLine(Color.Black.copy(alpha = 0.4f), Offset(left + cellSize * 0.3f, top), Offset(left + cellSize * 0.7f, top + cellSize), 1f)
+            drawSingleBrick(left + 1f, top + 1f, cellSize - 2f, cellSize - 2f, palette)
+            // Faint crack indicating trapdoor
+            drawLine(Color.Black.copy(alpha = 0.5f), Offset(left + cellSize * 0.3f, top + 2f), Offset(left + cellSize * 0.6f, top + cellSize - 2f), 1.2f)
         }
 
-        TileType.EMPTY -> {
-            // Nothing to draw
-        }
+        TileType.EMPTY -> {}
     }
 }
 
-private fun DrawScope.drawLadder(left: Float, top: Float, cellSize: Float, railColor: Color, rungColor: Color) {
-    val railInset = cellSize * 0.2f
-    val railWidth = 2.5f
+private fun DrawScope.drawSingleBrick(x: Float, y: Float, w: Float, h: Float, palette: GamePalette) {
+    // 3D Beveled Clay Brick
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(palette.brickHighlight, palette.brickMain, Color(0xFF702008)),
+            startY = y,
+            endY = y + h
+        ),
+        topLeft = Offset(x, y),
+        size = Size(w, h),
+        cornerRadius = CornerRadius(1.5f, 1.5f)
+    )
 
-    // Left and Right rails
-    drawLine(railColor, Offset(left + railInset, top), Offset(left + railInset, top + cellSize), railWidth)
-    drawLine(railColor, Offset(left + cellSize - railInset, top), Offset(left + cellSize - railInset, top + cellSize), railWidth)
+    // Top & Left highlight
+    drawLine(palette.brickHighlight, Offset(x, y), Offset(x + w, y), 1f)
+    drawLine(palette.brickHighlight, Offset(x, y), Offset(x, y + h), 1f)
 
-    // 4 horizontal rungs
+    // Bottom shadow
+    drawLine(Color.Black.copy(alpha = 0.4f), Offset(x, y + h), Offset(x + w, y + h), 1f)
+}
+
+private fun DrawScope.drawEnhancedLadder(left: Float, top: Float, cellSize: Float, railColor: Color, rungColor: Color) {
+    val railInset = cellSize * 0.18f
+    val railW = 3f
+
+    // Rail drop shadows
+    drawLine(Color.Black.copy(alpha = 0.4f), Offset(left + railInset + 1f, top), Offset(left + railInset + 1f, top + cellSize), railW)
+    drawLine(Color.Black.copy(alpha = 0.4f), Offset(left + cellSize - railInset + 1f, top), Offset(left + cellSize - railInset + 1f, top + cellSize), railW)
+
+    // Left and Right rails with metallic gradient effect
+    drawLine(railColor, Offset(left + railInset, top), Offset(left + railInset, top + cellSize), railW)
+    drawLine(railColor, Offset(left + cellSize - railInset, top), Offset(left + cellSize - railInset, top + cellSize), railW)
+
+    // 4 3D cylindrical rungs
     val rungs = 4
     for (i in 0 until rungs) {
         val rungY = top + (i + 0.5f) * (cellSize / rungs)
-        drawLine(
-            rungColor,
-            Offset(left + railInset, rungY),
-            Offset(left + cellSize - railInset, rungY),
-            2f
-        )
+
+        // Rung shadow
+        drawLine(Color.Black.copy(alpha = 0.4f), Offset(left + railInset, rungY + 1.5f), Offset(left + cellSize - railInset, rungY + 1.5f), 2.5f)
+        // Main rung
+        drawLine(rungColor, Offset(left + railInset, rungY), Offset(left + cellSize - railInset, rungY), 2.5f)
+        // Top gleam
+        drawLine(Color.White.copy(alpha = 0.7f), Offset(left + railInset + 1f, rungY - 0.5f), Offset(left + cellSize - railInset - 1f, rungY - 0.5f), 1f)
     }
 }
 
-private fun DrawScope.drawDugHole(hole: DugHole, left: Float, top: Float, cellSize: Float, palette: GamePalette, tickCount: Long) {
+private fun DrawScope.drawEnhancedDugHole(hole: DugHole, left: Float, top: Float, cellSize: Float, palette: GamePalette, tickCount: Long) {
     if (hole.isCrumbling) {
-        // Warning: crumbling / flashing
-        val flash = (tickCount / 6) % 2 == 0L
-        if (flash) {
-            drawRect(
-                color = palette.brickMain.copy(alpha = 0.45f),
-                topLeft = Offset(left, top),
-                size = Size(cellSize, cellSize)
-            )
-        }
-        // Debris / crack lines
-        drawLine(palette.brickHighlight, Offset(left + 2f, top + 2f), Offset(left + cellSize - 2f, top + cellSize - 2f), 2f)
-        drawLine(palette.brickHighlight, Offset(left + cellSize - 2f, top + 2f), Offset(left + 2f, top + cellSize - 2f), 2f)
+        // Warning: brick is cracking and regenerating
+        val flash = (tickCount / 5) % 2 == 0L
+        val baseColor = if (flash) palette.brickHighlight.copy(alpha = 0.6f) else palette.brickMain.copy(alpha = 0.35f)
+
+        drawRoundRect(
+            color = baseColor,
+            topLeft = Offset(left, top),
+            size = Size(cellSize, cellSize),
+            cornerRadius = CornerRadius(3f, 3f)
+        )
+
+        // Jagged glowing energy fissures
+        val crackColor = Color(0xFFFF9900)
+        drawLine(crackColor, Offset(left + cellSize * 0.2f, top + 2f), Offset(left + cellSize * 0.5f, top + cellSize * 0.5f), 2f)
+        drawLine(crackColor, Offset(left + cellSize * 0.5f, top + cellSize * 0.5f), Offset(left + cellSize * 0.8f, top + cellSize - 2f), 2f)
+        drawLine(crackColor, Offset(left + cellSize * 0.8f, top + 2f), Offset(left + cellSize * 0.2f, top + cellSize - 2f), 1.5f)
     } else {
-        // Open hole
+        // Open hole: deep recessed pit
         drawRect(
-            color = palette.background,
+            brush = Brush.radialGradient(
+                colors = listOf(Color.Black, Color(0xFF10141E)),
+                center = Offset(left + cellSize / 2f, top + cellSize / 2f),
+                radius = cellSize * 0.7f
+            ),
             topLeft = Offset(left, top),
             size = Size(cellSize, cellSize)
         )
-        // Hole edge lip
+
+        // Pit lip / rubble edge
         drawRect(
-            color = Color.Black.copy(alpha = 0.8f),
-            topLeft = Offset(left + 2f, top + 2f),
-            size = Size(cellSize - 4f, cellSize - 4f)
+            color = palette.brickHighlight.copy(alpha = 0.5f),
+            topLeft = Offset(left + 1f, top),
+            size = Size(cellSize - 2f, 2f)
         )
+        // Rubble stones at pit floor
+        drawCircle(palette.brickMain, 2f, Offset(left + cellSize * 0.25f, top + cellSize - 3f))
+        drawCircle(palette.brickHighlight, 1.5f, Offset(left + cellSize * 0.7f, top + cellSize - 2.5f))
     }
 }
 
-private fun DrawScope.drawRunner(runner: Runner, left: Float, top: Float, cellSize: Float, palette: GamePalette) {
+private fun DrawScope.drawEnhancedRunner(
+    runner: Runner,
+    left: Float,
+    top: Float,
+    cellSize: Float,
+    palette: GamePalette,
+    tickCount: Long
+) {
     val centerX = left + cellSize / 2f
-    val headRadius = cellSize * 0.2f
-    val headCenterY = top + cellSize * 0.28f
+    val facingLeft = runner.facing == Direction.LEFT
+    val dirSign = if (facingLeft) -1f else 1f
 
-    // Draw Head
-    drawCircle(palette.runnerHead, headRadius, Offset(centerX, headCenterY))
+    // Character scale
+    val headRadius = cellSize * 0.22f
+    val headCenter = Offset(centerX, top + cellSize * 0.24f)
 
-    // Torso
-    val torsoTopY = headCenterY + headRadius
-    val torsoBottomY = top + cellSize * 0.72f
-    drawLine(palette.runnerBody, Offset(centerX, torsoTopY), Offset(centerX, torsoBottomY), 4f)
+    // 1. Digging State: kneeling with laser blaster emitting glowing plasma beam
+    if (runner.state == EntityState.DIGGING) {
+        val digLeft = runner.digDirection == Direction.LEFT
+        val blastTargetX = if (digLeft) left - cellSize * 0.6f else left + cellSize * 1.6f
+        val blastTargetY = top + cellSize * 1.3f
 
-    // Limbs based on state
-    when (runner.state) {
-        EntityState.HANGING -> {
-            // Hands reaching up to rope bar
-            val ropeY = top + cellSize * 0.3f
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.2f, ropeY), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.8f, ropeY), 3f)
-            // Hanging legs swinging
-            val legSwing = if (runner.animFrame % 2 == 0) -cellSize * 0.15f else cellSize * 0.15f
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(centerX + legSwing, top + cellSize * 0.95f), 3f)
-        }
+        // Head looking down at blast
+        drawCircle(palette.runnerHead, headRadius, headCenter)
+        // Explorer hat / hair
+        drawArc(
+            color = Color(0xFFD4A040),
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = true,
+            topLeft = Offset(headCenter.x - headRadius, headCenter.y - headRadius - 1f),
+            size = Size(headRadius * 2f, headRadius * 1.8f)
+        )
 
-        EntityState.CLIMBING -> {
-            // Alternating limbs climbing ladder
-            val alt = (runner.animFrame % 2 == 0)
-            val leftHandY = if (alt) top + cellSize * 0.25f else top + cellSize * 0.5f
-            val rightHandY = if (alt) top + cellSize * 0.5f else top + cellSize * 0.25f
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.2f, leftHandY), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.8f, rightHandY), 3f)
+        // Tunic Torso
+        val torsoTop = headCenter.y + headRadius
+        val torsoBottom = top + cellSize * 0.68f
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop), Offset(centerX, torsoBottom), 5f, cap = StrokeCap.Round)
 
-            val leftFootY = if (alt) top + cellSize * 0.95f else top + cellSize * 0.8f
-            val rightFootY = if (alt) top + cellSize * 0.8f else top + cellSize * 0.95f
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.3f, leftFootY), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.7f, rightFootY), 3f)
-        }
+        // Kneeling legs
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX - dirSign * cellSize * 0.2f, top + cellSize * 0.95f), 4f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX + dirSign * cellSize * 0.15f, top + cellSize * 0.85f), 4f, cap = StrokeCap.Round)
 
-        EntityState.DIGGING -> {
-            // Digging laser / blast beam
-            val digLeft = runner.digDirection == Direction.LEFT
-            val targetX = if (digLeft) left - cellSize * 0.4f else left + cellSize * 1.4f
-            val targetY = top + cellSize * 1.2f
+        // Futuristic Laser Blaster
+        val blasterMuzzle = Offset(if (digLeft) left - 2f else left + cellSize + 2f, top + cellSize * 0.55f)
+        drawLine(Color(0xFFCCCCCC), Offset(centerX, torsoTop + 3f), blasterMuzzle, 3.5f, cap = StrokeCap.Round)
 
-            // Arm pointed down-diagonal
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 4f), Offset(if (digLeft) left else left + cellSize, top + cellSize * 0.6f), 3f)
-            // Bright energy beam into the brick
-            drawLine(Color(0xFF00FFFF), Offset(if (digLeft) left else left + cellSize, top + cellSize * 0.6f), Offset(targetX, targetY), 3f)
-            drawCircle(Color.White, 3f, Offset(targetX, targetY))
+        // Intense Laser Beam with energy sparks
+        val beamPulse = ((tickCount % 4) * 0.5f)
+        // Cyan outer energy glow
+        drawLine(Color(0x8000FFFF), blasterMuzzle, Offset(blastTargetX, blastTargetY), 6f + beamPulse, cap = StrokeCap.Round)
+        // White-hot plasma core
+        drawLine(Color.White, blasterMuzzle, Offset(blastTargetX, blastTargetY), 2.5f, cap = StrokeCap.Round)
 
-            // Legs planted
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.3f, top + cellSize * 0.95f), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.7f, top + cellSize * 0.95f), 3f)
-        }
-
-        EntityState.FALLING -> {
-            // Arms flailing upward
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.15f, top + cellSize * 0.15f), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(left + cellSize * 0.85f, top + cellSize * 0.15f), 3f)
-            // Legs dangling
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.4f, top + cellSize * 0.98f), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(left + cellSize * 0.6f, top + cellSize * 0.98f), 3f)
-        }
-
-        else -> {
-            // Running or Idle
-            val facingLeft = runner.facing == Direction.LEFT
-            val legStride = if (runner.state == EntityState.RUNNING) {
-                when (runner.animFrame) {
-                    0 -> cellSize * 0.25f
-                    1 -> cellSize * 0.12f
-                    2 -> -cellSize * 0.12f
-                    else -> -cellSize * 0.25f
-                }
-            } else 0f
-
-            // Arms
-            val armDir = if (facingLeft) -1 else 1
-            drawLine(palette.runnerBody, Offset(centerX, torsoTopY + 2f), Offset(centerX + armDir * cellSize * 0.25f, torsoBottomY - 2f), 3f)
-
-            // Legs
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(centerX - legStride, top + cellSize * 0.95f), 3f)
-            drawLine(palette.runnerBody, Offset(centerX, torsoBottomY), Offset(centerX + legStride, top + cellSize * 0.95f), 3f)
-        }
-    }
-}
-
-private fun DrawScope.drawEnemy(enemy: Enemy, left: Float, top: Float, cellSize: Float, palette: GamePalette) {
-    val centerX = left + cellSize / 2f
-
-    if (enemy.isTrapped) {
-        // Trapped in hole: head popping up with confused eyes
-        val headRadius = cellSize * 0.22f
-        val headCenterY = top + cellSize * 0.35f
-        drawCircle(palette.guardBody, headRadius, Offset(centerX, headCenterY))
-        drawCircle(palette.guardHead, headRadius * 0.6f, Offset(centerX, headCenterY))
-        // Stunned X eyes
-        val eyeSize = 3f
-        drawLine(Color.Yellow, Offset(centerX - 4f, headCenterY - 2f), Offset(centerX - 1f, headCenterY + 1f), 1.5f)
-        drawLine(Color.Yellow, Offset(centerX - 1f, headCenterY - 2f), Offset(centerX - 4f, headCenterY + 1f), 1.5f)
-        drawLine(Color.Yellow, Offset(centerX + 1f, headCenterY - 2f), Offset(centerX + 4f, headCenterY + 1f), 1.5f)
-        drawLine(Color.Yellow, Offset(centerX + 4f, headCenterY - 2f), Offset(centerX + 1f, headCenterY + 1f), 1.5f)
+        // Impact spark explosion on brick
+        drawCircle(Color(0xFF00FFFF), 4.5f + beamPulse, Offset(blastTargetX, blastTargetY))
+        drawCircle(Color.White, 2.5f, Offset(blastTargetX, blastTargetY))
         return
     }
 
-    val headRadius = cellSize * 0.2f
-    val headCenterY = top + cellSize * 0.28f
+    // 2. Hanging on Rope
+    if (runner.state == EntityState.HANGING) {
+        val ropeY = top + cellSize * 0.3f
+        // Head
+        drawCircle(palette.runnerHead, headRadius, Offset(centerX, top + cellSize * 0.35f))
+        // Torso
+        val torsoY = top + cellSize * 0.45f
+        drawLine(palette.runnerBody, Offset(centerX, torsoY), Offset(centerX, top + cellSize * 0.72f), 5f, cap = StrokeCap.Round)
+        // Arms reaching up gripping bar
+        drawLine(palette.runnerBody, Offset(centerX, torsoY), Offset(centerX - cellSize * 0.22f, ropeY), 3.5f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoY), Offset(centerX + cellSize * 0.22f, ropeY), 3.5f, cap = StrokeCap.Round)
 
-    // Guard Hood/Head
-    drawCircle(palette.guardBody, headRadius, Offset(centerX, headCenterY))
-    drawCircle(palette.guardHead, headRadius * 0.5f, Offset(centerX, headCenterY + 1f))
+        // Swinging legs
+        val swing = sin(tickCount * 0.3).toFloat() * cellSize * 0.18f
+        drawLine(palette.runnerBody, Offset(centerX, top + cellSize * 0.72f), Offset(centerX + swing, top + cellSize * 0.95f), 3.5f, cap = StrokeCap.Round)
+        return
+    }
 
-    // Torso
-    val torsoTopY = headCenterY + headRadius
-    val torsoBottomY = top + cellSize * 0.72f
-    drawLine(palette.guardBody, Offset(centerX, torsoTopY), Offset(centerX, torsoBottomY), 4.5f)
+    // 3. Climbing on Ladder
+    if (runner.state == EntityState.CLIMBING) {
+        drawCircle(palette.runnerHead, headRadius, headCenter)
+        // Torso
+        val torsoTop = headCenter.y + headRadius
+        val torsoBottom = top + cellSize * 0.7f
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop), Offset(centerX, torsoBottom), 5f, cap = StrokeCap.Round)
 
-    // Arms & Legs
-    val legStride = if (enemy.state == EntityState.RUNNING) {
-        when (enemy.animFrame) {
-            0 -> cellSize * 0.2f
-            1 -> cellSize * 0.1f
-            2 -> -cellSize * 0.1f
-            else -> -cellSize * 0.2f
+        // Alternating climbing limbs
+        val step = (runner.animFrame % 2 == 0)
+        val leftHandY = if (step) top + cellSize * 0.2f else top + cellSize * 0.48f
+        val rightHandY = if (step) top + cellSize * 0.48f else top + cellSize * 0.2f
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop + 2f), Offset(centerX - cellSize * 0.25f, leftHandY), 3.5f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop + 2f), Offset(centerX + cellSize * 0.25f, rightHandY), 3.5f, cap = StrokeCap.Round)
+
+        val leftFootY = if (step) top + cellSize * 0.95f else top + cellSize * 0.8f
+        val rightFootY = if (step) top + cellSize * 0.8f else top + cellSize * 0.95f
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX - cellSize * 0.2f, leftFootY), 3.5f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX + cellSize * 0.2f, rightFootY), 3.5f, cap = StrokeCap.Round)
+        return
+    }
+
+    // 4. Falling
+    if (runner.state == EntityState.FALLING) {
+        drawCircle(palette.runnerHead, headRadius, headCenter)
+        // Shocked expression
+        drawCircle(Color.Black, 1.2f, Offset(headCenter.x - 2f, headCenter.y))
+        drawCircle(Color.Black, 1.2f, Offset(headCenter.x + 2f, headCenter.y))
+
+        // Torso
+        val torsoTop = headCenter.y + headRadius
+        val torsoBottom = top + cellSize * 0.68f
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop), Offset(centerX, torsoBottom), 5f, cap = StrokeCap.Round)
+
+        // Flailing arms up
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop + 2f), Offset(centerX - cellSize * 0.3f, top + cellSize * 0.12f), 3.5f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoTop + 2f), Offset(centerX + cellSize * 0.3f, top + cellSize * 0.12f), 3.5f, cap = StrokeCap.Round)
+
+        // Dangling legs
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX - cellSize * 0.15f, top + cellSize * 0.95f), 3.5f, cap = StrokeCap.Round)
+        drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(centerX + cellSize * 0.15f, top + cellSize * 0.95f), 3.5f, cap = StrokeCap.Round)
+        return
+    }
+
+    // 5. Normal Running / Idle
+    // Head
+    drawCircle(palette.runnerHead, headRadius, headCenter)
+    // Explorer hair/hat
+    drawArc(
+        color = Color(0xFFD4A040),
+        startAngle = 180f,
+        sweepAngle = 180f,
+        useCenter = true,
+        topLeft = Offset(headCenter.x - headRadius, headCenter.y - headRadius - 1f),
+        size = Size(headRadius * 2f, headRadius * 1.8f)
+    )
+    // Eye looking forward
+    val eyeX = headCenter.x + dirSign * 2f
+    drawCircle(Color.Black, 1.2f, Offset(eyeX, headCenter.y))
+
+    // Torso (Adventurer Tunic)
+    val torsoTop = headCenter.y + headRadius
+    val torsoBottom = top + cellSize * 0.68f
+    drawLine(palette.runnerBody, Offset(centerX, torsoTop), Offset(centerX, torsoBottom), 5f, cap = StrokeCap.Round)
+
+    // Golden Belt buckle
+    drawRect(Color(0xFFFFD700), Offset(centerX - 2f, torsoBottom - 2f), Size(4f, 2.5f))
+
+    // Animated Run Stride
+    val stride = if (runner.state == EntityState.RUNNING) {
+        when (runner.animFrame) {
+            0 -> cellSize * 0.28f
+            1 -> cellSize * 0.14f
+            2 -> -cellSize * 0.14f
+            else -> -cellSize * 0.28f
         }
     } else 0f
 
-    drawLine(palette.guardBody, Offset(centerX, torsoBottomY), Offset(centerX - legStride, top + cellSize * 0.95f), 3.5f)
-    drawLine(palette.guardBody, Offset(centerX, torsoBottomY), Offset(centerX + legStride, top + cellSize * 0.95f), 3.5f)
+    // Arms swinging with stride
+    val armSwing = if (runner.state == EntityState.RUNNING) -stride * 0.7f else dirSign * cellSize * 0.15f
+    drawLine(palette.runnerBody, Offset(centerX, torsoTop + 2f), Offset(centerX + armSwing, torsoBottom - 1f), 3.5f, cap = StrokeCap.Round)
 
-    // If carrying gold, draw gold icon over head
+    // Legs
+    val legFrontX = centerX + dirSign * stride
+    val legBackX = centerX - dirSign * stride
+    drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(legFrontX, top + cellSize * 0.95f), 3.8f, cap = StrokeCap.Round)
+    drawLine(palette.runnerBody, Offset(centerX, torsoBottom), Offset(legBackX, top + cellSize * 0.95f), 3.8f, cap = StrokeCap.Round)
+
+    // Boots
+    val bootColor = Color(0xFF382010)
+    drawRect(bootColor, Offset(legFrontX - 2f, top + cellSize * 0.92f), Size(4.5f, 3f))
+    drawRect(bootColor, Offset(legBackX - 2f, top + cellSize * 0.92f), Size(4.5f, 3f))
+}
+
+private fun DrawScope.drawEnhancedEnemy(
+    enemy: Enemy,
+    left: Float,
+    top: Float,
+    cellSize: Float,
+    palette: GamePalette,
+    tickCount: Long
+) {
+    val centerX = left + cellSize / 2f
+    val facingLeft = enemy.facing == Direction.LEFT
+    val dirSign = if (facingLeft) -1f else 1f
+
+    // 1. Trapped Enemy in Hole
+    if (enemy.isTrapped) {
+        val headRadius = cellSize * 0.25f
+        val headCenterY = top + cellSize * 0.38f
+
+        // Hooded Guard Head popping up
+        drawCircle(palette.guardBody, headRadius, Offset(centerX, headCenterY))
+        drawCircle(Color(0xFF280808), headRadius * 0.65f, Offset(centerX, headCenterY))
+
+        // Flashing Stunned X Eyes
+        val eyeTick = (tickCount / 4) % 2 == 0L
+        val eyeColor = if (eyeTick) Color.Yellow else Color(0xFFFF4040)
+        val eyeSize = 3.5f
+
+        // Left eye X
+        drawLine(eyeColor, Offset(centerX - 5f, headCenterY - 2.5f), Offset(centerX - 1.5f, headCenterY + 1.5f), 1.8f)
+        drawLine(eyeColor, Offset(centerX - 1.5f, headCenterY - 2.5f), Offset(centerX - 5f, headCenterY + 1.5f), 1.8f)
+
+        // Right eye X
+        drawLine(eyeColor, Offset(centerX + 1.5f, headCenterY - 2.5f), Offset(centerX + 5f, headCenterY + 1.5f), 1.8f)
+        drawLine(eyeColor, Offset(centerX + 5f, headCenterY - 2.5f), Offset(centerX + 1.5f, headCenterY + 1.5f), 1.8f)
+
+        // Flailing hands clawing at hole rim
+        val handSwing = sin(tickCount * 0.4).toFloat() * 2f
+        drawCircle(palette.guardBody, 2.5f, Offset(left + 3f, top + 1f + handSwing))
+        drawCircle(palette.guardBody, 2.5f, Offset(left + cellSize - 3f, top + 1f - handSwing))
+        return
+    }
+
+    // 2. Active Bungeling Guard (Menacing Red Cloak & Glowing Visor)
+    val headRadius = cellSize * 0.22f
+    val headCenter = Offset(centerX, top + cellSize * 0.24f)
+
+    // Crimson Hood
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(palette.guardBody, Color(0xFF881010)),
+            center = headCenter,
+            radius = headRadius
+        ),
+        radius = headRadius,
+        center = headCenter
+    )
+
+    // Dark Shadowed Visor Opening
+    drawCircle(Color(0xFF140404), headRadius * 0.6f, Offset(headCenter.x + dirSign * 1.5f, headCenter.y + 1f))
+
+    // Menacing Glowing Optic / Eyes
+    val opticGlow = Color(0xFFFFEA00)
+    drawCircle(opticGlow, 1.8f, Offset(headCenter.x + dirSign * 2.5f, headCenter.y + 1f))
+    drawCircle(Color.White, 0.9f, Offset(headCenter.x + dirSign * 2.5f, headCenter.y + 1f))
+
+    // Flowing Robed Torso
+    val torsoTop = headCenter.y + headRadius
+    val torsoBottom = top + cellSize * 0.7f
+    drawLine(palette.guardBody, Offset(centerX, torsoTop), Offset(centerX, torsoBottom), 5.5f, cap = StrokeCap.Round)
+
+    // Guard Shoulder Mantle
+    drawLine(Color(0xFF700C0C), Offset(centerX - cellSize * 0.2f, torsoTop + 2f), Offset(centerX + cellSize * 0.2f, torsoTop + 2f), 3f)
+
+    // Running Stride
+    val stride = if (enemy.state == EntityState.RUNNING) {
+        when (enemy.animFrame) {
+            0 -> cellSize * 0.24f
+            1 -> cellSize * 0.12f
+            2 -> -cellSize * 0.12f
+            else -> -cellSize * 0.24f
+        }
+    } else 0f
+
+    // Cloaked Limbs
+    drawLine(palette.guardBody, Offset(centerX, torsoBottom), Offset(centerX + dirSign * stride, top + cellSize * 0.95f), 4f, cap = StrokeCap.Round)
+    drawLine(palette.guardBody, Offset(centerX, torsoBottom), Offset(centerX - dirSign * stride, top + cellSize * 0.95f), 4f, cap = StrokeCap.Round)
+
+    // If carrying stolen gold, draw glowing treasure chest on back!
     if (enemy.hasGold) {
-        val gSize = cellSize * 0.35f
-        drawRect(palette.gold, Offset(centerX - gSize / 2f, top - gSize), Size(gSize, gSize))
+        val chestSize = cellSize * 0.4f
+        val chestCenter = Offset(centerX - dirSign * cellSize * 0.25f, top + cellSize * 0.15f)
+        drawRoundRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(palette.goldHighlight, palette.gold),
+                startY = chestCenter.y - chestSize / 2f,
+                endY = chestCenter.y + chestSize / 2f
+            ),
+            topLeft = Offset(chestCenter.x - chestSize / 2f, chestCenter.y - chestSize / 2f),
+            size = Size(chestSize, chestSize),
+            cornerRadius = CornerRadius(2f, 2f)
+        )
+        drawCircle(Color.White, 1.5f, Offset(chestCenter.x, chestCenter.y))
     }
 }
 
-private fun DrawScope.drawScanlines(left: Float, top: Float, width: Float, height: Float) {
+private fun DrawScope.drawEnhancedCrtEffects(left: Float, top: Float, width: Float, height: Float) {
+    // 1. Scanlines
     val scanlineStep = 4f
     var y = top
     while (y < top + height) {
         drawLine(
-            color = Color.Black.copy(alpha = 0.18f),
+            color = Color.Black.copy(alpha = 0.20f),
             start = Offset(left, y),
             end = Offset(left + width, y),
-            strokeWidth = 1.2f
+            strokeWidth = 1.3f
         )
         y += scanlineStep
     }
+
+    // 2. Subtle CRT Screen Corner Vignette
+    val cornerRadius = 24f
+    drawRoundRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f)),
+            center = Offset(left + width / 2f, top + height / 2f),
+            radius = maxOf(width, height) * 0.65f
+        ),
+        topLeft = Offset(left, top),
+        size = Size(width, height),
+        cornerRadius = CornerRadius(cornerRadius, cornerRadius)
+    )
 }
