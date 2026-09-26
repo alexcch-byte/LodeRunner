@@ -61,6 +61,40 @@ class LevelManager(context: Context? = null) {
         }
     }
 
+    fun getGameSpeed(): com.example.loderunner.game.model.GameSpeed {
+        val name = prefs?.getString("game_speed", com.example.loderunner.game.model.GameSpeed.NORMAL.name)
+        return com.example.loderunner.game.model.GameSpeed.fromName(name)
+    }
+
+    fun saveGameSpeed(speed: com.example.loderunner.game.model.GameSpeed) {
+        prefs?.edit()?.putString("game_speed", speed.name)?.apply()
+    }
+
+    fun getPaletteType(): com.example.loderunner.game.ui.theme.PaletteType {
+        val name = prefs?.getString("palette_type", com.example.loderunner.game.ui.theme.PaletteType.APPLE_II.name)
+        return com.example.loderunner.game.ui.theme.PaletteType.entries.find { it.name == name } ?: com.example.loderunner.game.ui.theme.PaletteType.APPLE_II
+    }
+
+    fun savePaletteType(type: com.example.loderunner.game.ui.theme.PaletteType) {
+        prefs?.edit()?.putString("palette_type", type.name)?.apply()
+    }
+
+    fun getCrtScanlines(): Boolean {
+        return prefs?.getBoolean("crt_scanlines", true) ?: true
+    }
+
+    fun saveCrtScanlines(enabled: Boolean) {
+        prefs?.edit()?.putBoolean("crt_scanlines", enabled)?.apply()
+    }
+
+    fun getSoundEnabled(): Boolean {
+        return prefs?.getBoolean("sound_enabled", true) ?: true
+    }
+
+    fun saveSoundEnabled(enabled: Boolean) {
+        prefs?.edit()?.putBoolean("sound_enabled", enabled)?.apply()
+    }
+
     private fun saveCustomLevelsToPrefs() {
         prefs ?: return
         val jsonArray = JSONArray()

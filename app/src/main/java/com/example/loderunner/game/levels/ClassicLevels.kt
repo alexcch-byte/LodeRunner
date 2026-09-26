@@ -4,138 +4,138 @@ import com.example.loderunner.game.model.LevelData
 
 object ClassicLevels {
     /**
-     * Level 1: The Classic Introductory Level.
-     * Features multi-tiered brick platforms, ladders, rope traverses, 5 gold chests, and 2 guards.
+     * Level 1: The Vault (Official 1983 Apple II Lode Runner).
+     * Fully connected platform tiers, ladders, ropes, and secret escape ladder.
      */
-    val LEVEL_1 = LevelData.fromAscii(
+    val LEVEL_1 = LevelData.fromLines(
         id = 1,
         name = "Level 1: The Vault",
-        ascii = """
-            E                          E
-            E                          E
-            E                          E
-            E##########################E
-            E         H     G    H     E
-            E         H   #####  H     E
-            E-------  H          H     E
-            E      #  H    G     H     E
-            E      #  H  #####   H     E
-            EG     #  H          H    GE
-            E###   #  H          H  ###E
-            E      #  H---G------H     E
-            E  M   #  H   #   #  H   M E
-            E#######  H   #   #  H#####E
-            E &       H   G   #  H     E
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        """
+        lines = listOf(
+            "                  S         ",
+            "    G             S         ",
+            "#######H#######   S         ",
+            "       H----------S    G    ",
+            "       H    ##H   #######H##",
+            "       H    ##H          H  ",
+            "     0 H    ##H       G0 H  ",
+            "##H#####    ########H#######",
+            "  H                 H       ",
+            "  H           0     H       ",
+            "#########H##########H       ",
+            "         H          H       ",
+            "       G H----------H   G   ",
+            "    H######         #######H",
+            "    H         &  G         H",
+            "############################"
+        )
     )
 
     /**
-     * Level 2: The Rope Maze.
-     * High suspended bars, falling traps, tricky guard paths.
+     * Level 2: High Wire (Official 1983 Apple II Lode Runner).
+     * Suspended monkey bars, false brick traps, and bedrock chambers.
      */
-    val LEVEL_2 = LevelData.fromAscii(
+    val LEVEL_2 = LevelData.fromLines(
         id = 2,
         name = "Level 2: High Wire",
-        ascii = """
-            E                          E
-            E                          E
-            E                          E
-            E--------------------------E
-            E    H         H           E
-            E    H   G     H    G      E
-            E#####   ###   H   ###     E
-            E        H     H     H     E
-            E  G     H     H     H  G  E
-            E#####   H   #####   H#####E
-            E        H     H     H     E
-            E  M     H  G  H  G  H   M E
-            E#####   H#####H#####H#####E
-            E        H     H     H     E
-            E   &    H     G     H     E
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        """
+        lines = listOf(
+            "   G                       H",
+            "H@@#@@H           G        H",
+            "H     H    H#########H G   H",
+            "H G 0 H    H         H####XH",
+            "H#@#@#H    H         H     S",
+            "H     H----H------  0H     S",
+            "H     H    H     H###@@@@@@H",
+            "H     H    H  G  H         H",
+            "H   0 H G  H#####H         H",
+            "@###@##@##@H         H###H##",
+            "@###@      H         H   H  ",
+            "@G  @      H   ------H   H G",
+            "########H###@@@@     H  ####",
+            "        H            H      ",
+            "        H   &        H      ",
+            "############################"
+        )
     )
 
     /**
-     * Level 3: The Pyramid.
-     * A central stepped pyramid with gold caches guarded by relentless Bungelings.
+     * Level 3: Stepped Descent (Official 1983 Apple II Lode Runner).
+     * Diagonal monkey bars, multi-floor guard chases, and central vault.
      */
-    val LEVEL_3 = LevelData.fromAscii(
+    val LEVEL_3 = LevelData.fromLines(
         id = 3,
-        name = "Level 3: The Pyramid",
-        ascii = """
-            E             H            E
-            E             H            E
-            E            H#H           E
-            E           H###H          E
-            E          H#####H         E
-            E         H#######H        E
-            E        H##  G  ##H       E
-            E       H###  G  ###H      E
-            E      H#####G G#####H     E
-            E     H###############H    E
-            E    H  -           -  H   E
-            E   H   -   G   G   -   H  E
-            E  H    -  #######  -    H E
-            E H  M  -           -  M  HE
-            E&H#####-           -#####HE
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        """
+        name = "Level 3: Stepped Descent",
+        lines = listOf(
+            "                           S",
+            "----------    G            S",
+            "H G      H##########H      S",
+            "#####H   H          H@@@@@@@",
+            "     H 0 H     G    H       ",
+            "     H######H#####H##       ",
+            "  G  H      H     H  --     ",
+            "####H#      H  0  H    --   ",
+            "    H    H######H##      --G",
+            "    H----H      H  0       #",
+            "    H       H#########H     ",
+            "    H       H#########H     ",
+            "###H##########   G   #####H#",
+            "###H########## H###H #####H#",
+            "   H      &    H###H   G  H ",
+            "############################"
+        )
     )
 
     /**
-     * Level 4: The Ladder Gauntlet.
-     * Vertical agility required, digging fast to trap guards.
+     * Level 4: The Gauntlet (Official 1983 Apple II Lode Runner).
+     * Symmetrical ladder grid with clustered guards and treasures.
      */
-    val LEVEL_4 = LevelData.fromAscii(
+    val LEVEL_4 = LevelData.fromLines(
         id = 4,
         name = "Level 4: Gauntlet",
-        ascii = """
-            E    H        H        H   E
-            E    H        H        H   E
-            E    H        H        H   E
-            E    H########H########H   E
-            E    H   G    H   G    H   E
-            E    H  ####  H  ####  H   E
-            E----H--------H--------H---E
-            E    H        H        H   E
-            E G  H   G    H   G    H  GE
-            E####H########H########H###E
-            E    H        H        H   E
-            E    H   M    H    M   H   E
-            E    H########H########H   E
-            E    H        H        H   E
-            E  & H        G        H   E
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        """
+        lines = listOf(
+            "S                           ",
+            "S-----------                ",
+            "H     H     # G #     H     ",
+            "H G  HHH  G ##### G  HHH  G ",
+            "H HH  H  HH       HH  H  HH ",
+            "H H HHHHH H       H HHHHH H ",
+            "H H  G0G  H   H   H  G0G  H ",
+            "H  H#####H   HHH   H#####H  ",
+            "H   HHHHH HH  H  HH HHHHH   ",
+            "H         H HHHHH H         ",
+            "H    G    H  G0G  H     G   ",
+            "H######H   H#####H  H#######",
+            "H      H    HHHHH   H       ",
+            "H      H            H       ",
+            "H      H       G  & H       ",
+            "############################"
+        )
     )
 
     /**
-     * Level 5: The Fortress.
-     * Heavy solid rocks and intricate diggable chambers.
+     * Level 5: The Pyramid / Staircase (Official 1983 Apple II Lode Runner).
+     * Intricate staggered stair steps, vertical ladder shafts, and rooftop escape.
      */
-    val LEVEL_5 = LevelData.fromAscii(
+    val LEVEL_5 = LevelData.fromLines(
         id = 5,
-        name = "Level 5: The Fortress",
-        ascii = """
-            E              E           E
-            E              E           E
-            E              E           E
-            E@@@@@@@@@@@@@@@@@@@@@@@@@@E
-            E  G   H     H     H   G   E
-            E ###  H  G  H  G  H  ###  E
-            E      H#####H#####H       E
-            E  M   H     H     H   M   E
-            E######H     H     H#######E
-            E      H-----H-----H       E
-            E  G   H     H     H   G   E
-            E #### H  G  H  G  H ####  E
-            E      H#####H#####H       E
-            E      H     H     H       E
-            E  &   H           H       E
-            @@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        """
+        name = "Level 5: Staircase",
+        lines = listOf(
+            "         S                  ",
+            "         S       G      0   ",
+            "##H      S      ####H#######",
+            "  H#     S     ##   H       ",
+            "  H##    S    ##    H       ",
+            "G H###   S  G###    H   G   ",
+            "##H####  S  ####H###H#######",
+            "  H   ## S ##   H           ",
+            "  HG0  ##H##    H     G     ",
+            "H###H    H     #H##H###     ",
+            "H   H              H        ",
+            "H   H    G     0   H        ",
+            "H   H#######H######H#####H##",
+            "H           H            H  ",
+            "H           H  &         H  ",
+            "############################"
+        )
     )
 
     val ALL_LEVELS: List<LevelData> = listOf(

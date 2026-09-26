@@ -17,6 +17,8 @@ enum class TileType(val id: Int, val charSymbol: Char) {
         fun fromId(id: Int): TileType = entries.find { it.id == id } ?: EMPTY
         fun fromChar(char: Char): TileType = when (char) {
             'G', '$', '*' -> GOLD
+            'S', 'E' -> ESCAPE_LADDER
+            'X', 'F' -> FALSE_BRICK
             else -> entries.find { it.charSymbol == char } ?: EMPTY
         }
     }

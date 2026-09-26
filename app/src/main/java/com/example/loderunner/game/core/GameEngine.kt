@@ -13,6 +13,8 @@ import com.example.loderunner.game.model.TileType
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+import com.example.loderunner.game.model.GameSpeed
+
 class GameEngine(
     val soundFx: SoundFxEngine = SoundFxEngine(),
     var onLevelComplete: (() -> Unit)? = null,
@@ -21,16 +23,36 @@ class GameEngine(
     var state: GameState = GameState()
         private set
 
+    var gameSpeed: GameSpeed = GameSpeed.NORMAL
+
     companion object {
-        const val RUNNER_SPEED = 0.12f
-        const val ENEMY_SPEED = 0.075f
-        const val FALL_SPEED = 0.16f
-        const val CLIMB_SPEED = 0.09f
-        const val HOLE_TOTAL_TICKS = 360 // ~6 seconds at 60 FPS
-        const val ENEMY_TRAPPED_TICKS = 180 // ~3 seconds in hole before climbing out
-        const val ENEMY_RESPAWN_DELAY = 120 // ~2 seconds after crushed
-        const val DIG_ANIM_TICKS = 15
+        const val BASE_RUNNER_SPEED = 0.075f
+        const val BASE_ENEMY_SPEED = 0.048f
+        const val BASE_FALL_SPEED = 0.110f
+        const val BASE_CLIMB_SPEED = 0.055f
+        const val BASE_HOLE_TOTAL_TICKS = 360 // ~6 seconds at 60 FPS
+        const val BASE_ENEMY_TRAPPED_TICKS = 180 // ~3 seconds in hole before climbing out
+        const val BASE_ENEMY_RESPAWN_DELAY = 120 // ~2 seconds after crushed
+        const val BASE_DIG_ANIM_TICKS = 18
+
+        const val HOLE_TOTAL_TICKS = BASE_HOLE_TOTAL_TICKS
+        const val ENEMY_TRAPPED_TICKS = BASE_ENEMY_TRAPPED_TICKS
+        const val ENEMY_RESPAWN_DELAY = BASE_ENEMY_RESPAWN_DELAY
+        const val DIG_ANIM_TICKS = BASE_DIG_ANIM_TICKS
+        const val RUNNER_SPEED = BASE_RUNNER_SPEED
+        const val ENEMY_SPEED = BASE_ENEMY_SPEED
+        const val FALL_SPEED = BASE_FALL_SPEED
+        const val CLIMB_SPEED = BASE_CLIMB_SPEED
     }
+
+    val runnerSpeed: Float get() = BASE_RUNNER_SPEED * gameSpeed.multiplier
+    val enemySpeed: Float get() = BASE_ENEMY_SPEED * gameSpeed.multiplier
+    val fallSpeed: Float get() = BASE_FALL_SPEED * gameSpeed.multiplier
+    val climbSpeed: Float get() = BASE_CLIMB_SPEED * gameSpeed.multiplier
+    val holeTotalTicks: Int get() = (BASE_HOLE_TOTAL_TICKS / gameSpeed.multiplier).toInt()
+    val enemyTrappedTicks: Int get() = (BASE_ENEMY_TRAPPED_TICKS / gameSpeed.multiplier).toInt()
+    val enemyRespawnDelay: Int get() = (BASE_ENEMY_RESPAWN_DELAY / gameSpeed.multiplier).toInt()
+    val digAnimTicks: Int get() = (BASE_DIG_ANIM_TICKS / gameSpeed.multiplier).toInt()
 
     private var inputDirection: Direction = Direction.NONE
     private var pendingDig: Direction = Direction.NONE
@@ -217,9 +239,9 @@ class GameEngine(
         if (targetTile == TileType.BRICK.id && isOverheadClear && !alreadyDug) {
             // Dig success!
             state.activeGrid[targetY][targetX] = TileType.EMPTY.id
-            state.dugHoles.add(DugHole(x = targetX, y = targetY, remainingTicks = HOLE_TOTAL_TICKS))
+            state.dugHoles.add(DugHole(x = targetX, y = targetY, remainingTicks = holeTotalTicks, totalTicks = holeTotalTicks))
 
-            runner.digTimer = DIG_ANIM_TICKS
+            runner.digTimer = digAnimTicks
             runner.digDirection = digDir
             runner.state = EntityState.DIGGING
             soundFx.playDig()
@@ -251,7 +273,7 @@ class GameEngine(
                     if (enemy.gridX == hole.x && enemy.gridY == hole.y) {
                         // Enemy crushed!
                         enemy.trappedTicks = 0
-                        enemy.respawnTicks = ENEMY_RESPAWN_DELAY
+                        enemy.respawnTicks = enemyRespawnDelay
                         enemy.state = EntityState.DEAD
                         state.score += 750 // 750 points for crushing guard!
                         soundFx.playCrush()
@@ -278,30 +300,33 @@ class GameEngine(
         val gy = runner.gridY
 
         val currentTile = getTile(gx, gy)
-        val groundTile = getTile(gx, gy + 1)
-        val isOnLadder = currentTile == TileType.LADDER || (currentTile == TileType.ESCAPE_LADDER && state.escapeLaddersRevealed)
-        val isAtLadderTop = groundTile == TileType.LADDER || (groundTile == TileType.ESCAPE_LADDER && state.escapeLaddersRevealed)
+        val groundTile = getTile(gx, (gy + 1).coerceAtMost(LevelData.ROWS - 1))
         val isOnRope = currentTile == TileType.ROPE
-
-        // Check if supported by ground or trapped enemy below
         val isEnemyBelow = isTrappedEnemyAt(gx, gy + 1)
-        val hasSolidGround = isSolid(groundTile) || (isAtLadderTop && abs(ry - gy) < 0.2f) || isEnemyBelow
+
+        val activeTrack = getActiveLadderTrack(rx, ry, hTolerance = 0.5f)
+        val inLadderTrack = activeTrack != null
+        val isSupportedOnLadderTop = activeTrack != null && abs(ry - activeTrack.yMin) < 0.35f
+
+        // Solid ground or ladder rungs directly beneath runner (e.g. standing on top of ladder)
+        val hasSolidGround = isSolid(groundTile) || isSupportedOnLadderTop || isEnemyBelow
 
         // 1. Gravity / Falling
-        if (!hasSolidGround && !isOnLadder && !isOnRope) {
+        // Runner only falls if NOT on solid ground, NOT in a ladder vertical track, and NOT on rope
+        if (!hasSolidGround && !inLadderTrack && !isOnRope) {
             runner.state = EntityState.FALLING
-            runner.y += FALL_SPEED
+            runner.y += fallSpeed
             // Snap X to column center while falling
             runner.x = alignToCenter(runner.x, gx)
 
             // Landing check
             val newGy = runner.gridY
-            val newGround = getTile(gx, newGy + 1)
-            val newOnLadder = getTile(gx, newGy) == TileType.LADDER
+            val newGround = getTile(gx, (newGy + 1).coerceAtMost(LevelData.ROWS - 1))
+            val newTrack = getActiveLadderTrack(runner.x, runner.y, hTolerance = 0.5f)
             val newOnRope = getTile(gx, newGy) == TileType.ROPE
             val newEnemyBelow = isTrappedEnemyAt(gx, newGy + 1)
 
-            if (isSolid(newGround) || newOnLadder || newOnRope || newEnemyBelow) {
+            if (isSolid(newGround) || newTrack != null || newOnRope || newEnemyBelow) {
                 runner.y = newGy.toFloat()
                 runner.state = EntityState.IDLE
             }
@@ -313,53 +338,145 @@ class GameEngine(
             Direction.LEFT -> {
                 runner.facing = Direction.LEFT
                 val targetCol = gx - 1
-                if (canMoveHorizontal(targetCol, gy)) {
-                    runner.x -= RUNNER_SPEED
-                    runner.state = if (isOnRope) EntityState.HANGING else EntityState.RUNNING
-                    runner.y = gy.toFloat() // Keep snapped to horizontal track
-                    runner.animFrame = ((state.tickCount / 4) % 4).toInt()
+                if (targetCol >= 0) {
+                    val currentTrack = getActiveLadderTrack(rx, ry, hTolerance = 0.5f)
+                    if (currentTrack != null) {
+                        val dismountRow = findAccessibleDismountRow(targetCol, ry)
+                        if (dismountRow != null) {
+                            runner.y = alignToCenter(runner.y, dismountRow)
+                            if (abs(runner.y - dismountRow) < 0.15f) {
+                                runner.y = dismountRow.toFloat()
+                            }
+                            runner.x -= runnerSpeed
+                            runner.state = if (getTile(targetCol, dismountRow) == TileType.ROPE) EntityState.HANGING else EntityState.RUNNING
+                            runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                        } else if (!isSolid(getTile(targetCol, kotlin.math.round(ry).toInt()))) {
+                            runner.x -= runnerSpeed
+                            runner.state = EntityState.RUNNING
+                            runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                        } else {
+                            runner.state = EntityState.IDLE
+                        }
+                    } else if (canMoveHorizontal(targetCol, gy)) {
+                        runner.x -= runnerSpeed
+                        runner.state = if (isOnRope) EntityState.HANGING else EntityState.RUNNING
+                        runner.y = gy.toFloat()
+                        runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                    } else {
+                        runner.x = gx.toFloat()
+                        runner.state = EntityState.IDLE
+                    }
                 } else {
-                    // Blocked by wall
-                    runner.x = gx.toFloat()
                     runner.state = EntityState.IDLE
                 }
             }
             Direction.RIGHT -> {
                 runner.facing = Direction.RIGHT
                 val targetCol = gx + 1
-                if (canMoveHorizontal(targetCol, gy)) {
-                    runner.x += RUNNER_SPEED
-                    runner.state = if (isOnRope) EntityState.HANGING else EntityState.RUNNING
-                    runner.y = gy.toFloat()
-                    runner.animFrame = ((state.tickCount / 4) % 4).toInt()
+                if (targetCol < LevelData.COLS) {
+                    val currentTrack = getActiveLadderTrack(rx, ry, hTolerance = 0.5f)
+                    if (currentTrack != null) {
+                        val dismountRow = findAccessibleDismountRow(targetCol, ry)
+                        if (dismountRow != null) {
+                            runner.y = alignToCenter(runner.y, dismountRow)
+                            if (abs(runner.y - dismountRow) < 0.15f) {
+                                runner.y = dismountRow.toFloat()
+                            }
+                            runner.x += runnerSpeed
+                            runner.state = if (getTile(targetCol, dismountRow) == TileType.ROPE) EntityState.HANGING else EntityState.RUNNING
+                            runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                        } else if (!isSolid(getTile(targetCol, kotlin.math.round(ry).toInt()))) {
+                            runner.x += runnerSpeed
+                            runner.state = EntityState.RUNNING
+                            runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                        } else {
+                            runner.state = EntityState.IDLE
+                        }
+                    } else if (canMoveHorizontal(targetCol, gy)) {
+                        runner.x += runnerSpeed
+                        runner.state = if (isOnRope) EntityState.HANGING else EntityState.RUNNING
+                        runner.y = gy.toFloat()
+                        runner.animFrame = ((state.tickCount / 6) % 4).toInt()
+                    } else {
+                        runner.x = gx.toFloat()
+                        runner.state = EntityState.IDLE
+                    }
                 } else {
-                    runner.x = gx.toFloat()
                     runner.state = EntityState.IDLE
                 }
             }
             Direction.UP -> {
-                if (isOnLadder || (isAtLadderTop && abs(rx - gx) < 0.3f)) {
-                    val targetRow = gy - 1
-                    if (targetRow >= 0 && !isSolid(getTile(gx, targetRow))) {
-                        runner.y -= CLIMB_SPEED
-                        runner.x = gx.toFloat()
-                        runner.state = EntityState.CLIMBING
-                        runner.animFrame = ((state.tickCount / 4) % 2).toInt()
+                val nearbyTrack = findNearbyLadderTrack(rx, ry, hTolerance = 0.85f, forClimbingUp = true)
+                if (nearbyTrack != null) {
+                    val col = nearbyTrack.col
+                    val xDiff = col - rx
+
+                    // Smooth horizontal steering towards ladder center
+                    if (abs(xDiff) > 0.04f) {
+                        runner.x += (if (xDiff > 0) 1f else -1f) * minOf(runnerSpeed, abs(xDiff))
+                        runner.facing = if (xDiff > 0) Direction.RIGHT else Direction.LEFT
+                    } else {
+                        runner.x = col.toFloat()
+                    }
+
+                    // Vertical climbing if within 0.45 tiles of ladder center
+                    if (abs(rx - col) <= 0.45f) {
+                        if (ry > nearbyTrack.yMin) {
+                            runner.y = maxOf(nearbyTrack.yMin, ry - climbSpeed)
+                            runner.state = EntityState.CLIMBING
+                            runner.animFrame = ((state.tickCount / 6) % 2).toInt()
+                        } else {
+                            runner.y = nearbyTrack.yMin
+                            runner.state = EntityState.IDLE
+                        }
+                    } else {
+                        runner.state = EntityState.RUNNING
+                        runner.animFrame = ((state.tickCount / 6) % 4).toInt()
                     }
                 }
             }
             Direction.DOWN -> {
-                if (isOnLadder || isAtLadderTop) {
-                    val targetRow = gy + 1
-                    if (targetRow < LevelData.ROWS && !isSolid(getTile(gx, targetRow))) {
-                        runner.y += CLIMB_SPEED
-                        runner.x = gx.toFloat()
-                        runner.state = EntityState.CLIMBING
-                        runner.animFrame = ((state.tickCount / 4) % 2).toInt()
+                val nearbyTrack = findNearbyLadderTrack(rx, ry, hTolerance = 0.85f, forClimbingUp = false)
+                if (nearbyTrack != null) {
+                    val col = nearbyTrack.col
+                    val xDiff = col - rx
+
+                    // Smooth horizontal steering towards ladder center
+                    if (abs(xDiff) > 0.04f) {
+                        runner.x += (if (xDiff > 0) 1f else -1f) * minOf(runnerSpeed, abs(xDiff))
+                        runner.facing = if (xDiff > 0) Direction.RIGHT else Direction.LEFT
+                    } else {
+                        runner.x = col.toFloat()
+                    }
+
+                    // Vertical climbing if within 0.45 tiles of ladder center
+                    if (abs(rx - col) <= 0.45f) {
+                        if (ry < nearbyTrack.yMax) {
+                            runner.y = minOf(nearbyTrack.yMax, ry + climbSpeed)
+                            runner.state = EntityState.CLIMBING
+                            runner.animFrame = ((state.tickCount / 6) % 2).toInt()
+                        } else {
+                            // Reached the bottom of the ladder
+                            val bottomRow = kotlin.math.round(nearbyTrack.yMax).toInt()
+                            val floorBelowSolid = bottomRow < LevelData.ROWS - 1 && isSolid(getTile(col, bottomRow + 1))
+                            val enemyBelow = isTrappedEnemyAt(col, bottomRow + 1)
+                            if (floorBelowSolid || enemyBelow) {
+                                runner.y = nearbyTrack.yMax
+                                runner.state = EntityState.IDLE
+                            } else {
+                                // Hanging ladder: drop off into air
+                                runner.y += fallSpeed
+                                runner.state = EntityState.FALLING
+                                soundFx.playFall()
+                            }
+                        }
+                    } else {
+                        runner.state = EntityState.RUNNING
+                        runner.animFrame = ((state.tickCount / 6) % 4).toInt()
                     }
                 } else if (isOnRope) {
-                    // Drop down from rope
-                    runner.y += FALL_SPEED
+                    // Drop down from monkey bar
+                    runner.y += fallSpeed
                     runner.state = EntityState.FALLING
                     soundFx.playFall()
                 }
@@ -411,7 +528,7 @@ class GameEngine(
             val isCurrentlyInHole = state.dugHoles.any { it.x == egx && it.y == egy }
             if (isCurrentlyInHole && !enemy.isTrapped) {
                 // Enemy falls into dug hole!
-                enemy.trappedTicks = ENEMY_TRAPPED_TICKS
+                enemy.trappedTicks = enemyTrappedTicks
                 enemy.state = EntityState.TRAPPED
                 enemy.x = egx.toFloat()
                 enemy.y = egy.toFloat()
@@ -449,7 +566,7 @@ class GameEngine(
             // 2. Enemy Gravity / Falling
             if (!hasSolidGround && !isOnLadder && !isOnRope) {
                 enemy.state = EntityState.FALLING
-                enemy.y += FALL_SPEED
+                enemy.y += fallSpeed
                 enemy.x = alignToCenter(enemy.x, egx)
                 val newEgy = enemy.gridY
                 val newGround = getTile(egx, newEgy + 1)
@@ -469,17 +586,17 @@ class GameEngine(
                 val moveUp = diffY < 0
                 val targetRow = if (moveUp) egy - 1 else egy + 1
                 if (targetRow in 0 until LevelData.ROWS && !isSolid(getTile(egx, targetRow))) {
-                    enemy.y += if (moveUp) -CLIMB_SPEED else CLIMB_SPEED
+                    enemy.y += if (moveUp) -climbSpeed else climbSpeed
                     enemy.x = egx.toFloat()
                     enemy.state = EntityState.CLIMBING
-                    enemy.animFrame = ((state.tickCount / 6) % 2).toInt()
+                    enemy.animFrame = ((state.tickCount / 8) % 2).toInt()
                     continue
                 }
             }
 
             // If at ladder top and player is below, climb down
             if (isAtLadderTop && diffY > 0.8f && abs(diffX) < 0.5f) {
-                enemy.y += CLIMB_SPEED
+                enemy.y += climbSpeed
                 enemy.x = egx.toFloat()
                 enemy.state = EntityState.CLIMBING
                 continue
@@ -492,15 +609,15 @@ class GameEngine(
                 enemy.facing = if (moveRight) Direction.RIGHT else Direction.LEFT
 
                 if (canMoveHorizontal(targetCol, egy)) {
-                    enemy.x += if (moveRight) ENEMY_SPEED else -ENEMY_SPEED
+                    enemy.x += if (moveRight) enemySpeed else -enemySpeed
                     enemy.state = if (isOnRope) EntityState.HANGING else EntityState.RUNNING
                     enemy.y = egy.toFloat()
-                    enemy.animFrame = ((state.tickCount / 5) % 4).toInt()
+                    enemy.animFrame = ((state.tickCount / 7) % 4).toInt()
                 } else {
                     // Blocked, check if there's a ladder to take
                     if (isOnLadder) {
                         val moveUp = diffY < 0
-                        enemy.y += if (moveUp) -CLIMB_SPEED else CLIMB_SPEED
+                        enemy.y += if (moveUp) -climbSpeed else climbSpeed
                         enemy.state = EntityState.CLIMBING
                     }
                 }
@@ -578,9 +695,125 @@ class GameEngine(
         return state.enemies.any { it.isTrapped && it.gridX == gx && it.gridY == gy }
     }
 
+    fun isLadder(col: Int, row: Int): Boolean {
+        if (col !in 0 until LevelData.COLS || row !in 0 until LevelData.ROWS) return false
+        val tile = state.activeGrid[row][col]
+        return tile == TileType.LADDER.id || (tile == TileType.ESCAPE_LADDER.id && state.escapeLaddersRevealed)
+    }
+
+    data class LadderTrack(val col: Int, val yMin: Float, val yMax: Float)
+
+    fun getLadderTrackAt(col: Int, row: Int): LadderTrack? {
+        if (col !in 0 until LevelData.COLS) return null
+        val candidateRows = listOf(row, row + 1, row - 1).filter { r ->
+            r in 0 until LevelData.ROWS && isLadder(col, r)
+        }
+        val ladderRow = candidateRows.firstOrNull() ?: return null
+
+        var top = ladderRow
+        while (top > 0 && isLadder(col, top - 1)) {
+            top--
+        }
+        var bottom = ladderRow
+        while (bottom < LevelData.ROWS - 1 && isLadder(col, bottom + 1)) {
+            bottom++
+        }
+
+        // Top-most accessible Y: standing on top rung (y = top - 1) if space above isn't solid
+        val yMin = if (top > 0 && !isSolid(getTile(col, top - 1))) {
+            (top - 1).toFloat()
+        } else {
+            top.toFloat()
+        }
+
+        val yMax = bottom.toFloat()
+        return LadderTrack(col, yMin, yMax)
+    }
+
+    fun getActiveLadderTrack(x: Float, y: Float, hTolerance: Float = 0.5f): LadderTrack? {
+        val gx = kotlin.math.round(x).toInt().coerceIn(0, LevelData.COLS - 1)
+        val cols = listOf(gx, (gx - 1).coerceAtLeast(0), (gx + 1).coerceAtMost(LevelData.COLS - 1)).distinct()
+        for (c in cols) {
+            if (abs(x - c) <= hTolerance) {
+                val candidateRows = listOf(
+                    kotlin.math.round(y).toInt(),
+                    kotlin.math.floor(y).toInt(),
+                    kotlin.math.ceil(y).toInt()
+                ).distinct()
+                for (r in candidateRows) {
+                    val track = getLadderTrackAt(c, r)
+                    if (track != null && y >= track.yMin - 0.15f && y <= track.yMax + 0.15f) {
+                        return track
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    fun findNearbyLadderTrack(x: Float, y: Float, hTolerance: Float = 0.85f, forClimbingUp: Boolean): LadderTrack? {
+        val gx = kotlin.math.round(x).toInt().coerceIn(0, LevelData.COLS - 1)
+        val cols = listOf(gx, (gx - 1).coerceAtLeast(0), (gx + 1).coerceAtMost(LevelData.COLS - 1)).distinct()
+            .sortedBy { abs(x - it) }
+
+        for (c in cols) {
+            if (abs(x - c) <= hTolerance) {
+                val candidateRows = listOf(
+                    kotlin.math.round(y).toInt(),
+                    kotlin.math.floor(y).toInt(),
+                    kotlin.math.ceil(y).toInt(),
+                    kotlin.math.round(y).toInt() - 1,
+                    kotlin.math.round(y).toInt() + 1
+                ).distinct()
+
+                for (r in candidateRows) {
+                    val track = getLadderTrackAt(c, r)
+                    if (track != null) {
+                        if (forClimbingUp) {
+                            if (y > track.yMin - 0.1f && y <= track.yMax + 1.1f) {
+                                return track
+                            }
+                        } else {
+                            if (y >= track.yMin - 0.5f && y < track.yMax + 0.15f) {
+                                return track
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun findAccessibleDismountRow(targetCol: Int, currentY: Float): Int? {
+        if (targetCol !in 0 until LevelData.COLS) return null
+        val gy = kotlin.math.round(currentY).toInt().coerceIn(0, LevelData.ROWS - 1)
+        val floorY = kotlin.math.floor(currentY).toInt().coerceIn(0, LevelData.ROWS - 1)
+        val ceilY = kotlin.math.ceil(currentY).toInt().coerceIn(0, LevelData.ROWS - 1)
+        val candidateRows = listOf(gy, floorY, ceilY).distinct().sortedBy { abs(currentY - it) }
+
+        for (row in candidateRows) {
+            if (abs(currentY - row) > 0.48f) continue
+            val tileAtTarget = getTile(targetCol, row)
+            if (isSolid(tileAtTarget)) continue
+
+            val groundAtTarget = getTile(targetCol, (row + 1).coerceAtMost(LevelData.ROWS - 1))
+            val isSupportedPlatform = isSolid(groundAtTarget) || 
+                                      isLadder(targetCol, row + 1) || 
+                                      tileAtTarget == TileType.ROPE ||
+                                      isLadder(targetCol, row) ||
+                                      isTrappedEnemyAt(targetCol, row + 1)
+
+            if (isSupportedPlatform) {
+                return row
+            }
+        }
+        return null
+    }
+
     private fun alignToCenter(current: Float, targetCell: Int): Float {
         val target = targetCell.toFloat()
         val diff = target - current
-        return if (abs(diff) < 0.08f) target else current + diff * 0.2f
+        return if (abs(diff) < 0.08f) target else current + diff * 0.35f
     }
 }

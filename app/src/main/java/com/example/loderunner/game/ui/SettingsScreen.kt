@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -24,8 +26,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.loderunner.game.model.GameSpeed
 import com.example.loderunner.game.ui.theme.GamePalette
 import com.example.loderunner.game.ui.theme.PaletteType
 
@@ -33,6 +37,8 @@ import com.example.loderunner.game.ui.theme.PaletteType
 fun SettingsScreen(
     currentPaletteType: PaletteType,
     onPaletteTypeChange: (PaletteType) -> Unit,
+    currentGameSpeed: GameSpeed,
+    onGameSpeedChange: (GameSpeed) -> Unit,
     showCrtScanlines: Boolean,
     onToggleCrtScanlines: (Boolean) -> Unit,
     isSoundEnabled: Boolean,
@@ -49,21 +55,77 @@ fun SettingsScreen(
     ) {
         Column(
             modifier = Modifier
-                .width(480.dp)
+                .width(520.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(palette.background)
                 .border(2.dp, palette.buttonBorder, RoundedCornerShape(16.dp))
-                .padding(28.dp),
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "SETTINGS & THEMES",
+                text = "SETTINGS & OPTIONS",
                 color = palette.buttonBorder,
-                fontSize = 24.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = FontFamily.Monospace
             )
+
+            // Game Speed Selector
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "GAME SPEED",
+                    color = palette.hudLabel,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GameSpeed.entries.forEach { speed ->
+                        val isSelected = currentGameSpeed == speed
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) palette.buttonBorder.copy(alpha = 0.25f) else palette.buttonBackground)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) palette.buttonBorder else Color.DarkGray,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .clickable { onGameSpeedChange(speed) }
+                                .padding(horizontal = 6.dp, vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = speed.displayName,
+                                    color = if (isSelected) palette.buttonBorder else Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontFamily = FontFamily.Monospace,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${speed.multiplier}x",
+                                    color = if (isSelected) palette.buttonBorder else Color.Gray,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // Retro Palette Selector
             Column(
@@ -96,7 +158,7 @@ fun SettingsScreen(
                         Text(
                             text = type.displayName,
                             color = if (isSelected) palette.buttonBorder else Color.White,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             fontFamily = FontFamily.Monospace
                         )
@@ -113,7 +175,7 @@ fun SettingsScreen(
                 Text(
                     text = "CRT SCANLINE EFFECT",
                     color = Color.White,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace
                 )
                 Switch(
@@ -135,7 +197,7 @@ fun SettingsScreen(
                 Text(
                     text = "8-BIT SOUND FX",
                     color = Color.White,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace
                 )
                 Switch(
@@ -148,7 +210,7 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Box(
                 modifier = Modifier
@@ -161,7 +223,7 @@ fun SettingsScreen(
                 Text(
                     text = "BACK TO MENU",
                     color = palette.buttonBorder,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace
                 )

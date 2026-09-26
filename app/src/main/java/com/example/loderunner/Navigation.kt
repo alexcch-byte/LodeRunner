@@ -26,9 +26,10 @@ fun MainNavigation() {
     val levelManager = remember { LevelManager(context) }
     val backStack = rememberNavBackStack(MainMenuKey)
 
-    var currentPaletteType by remember { mutableStateOf(PaletteType.APPLE_II) }
-    var showCrtScanlines by remember { mutableStateOf(true) }
-    var isSoundEnabled by remember { mutableStateOf(true) }
+    var currentPaletteType by remember { mutableStateOf(levelManager.getPaletteType()) }
+    var showCrtScanlines by remember { mutableStateOf(levelManager.getCrtScanlines()) }
+    var isSoundEnabled by remember { mutableStateOf(levelManager.getSoundEnabled()) }
+    var currentGameSpeed by remember { mutableStateOf(levelManager.getGameSpeed()) }
 
     val palette = remember(currentPaletteType) { GamePalette.forType(currentPaletteType) }
 
@@ -63,6 +64,8 @@ fun MainNavigation() {
                     levelManager = levelManager,
                     palette = palette,
                     showCrtScanlines = showCrtScanlines,
+                    gameSpeed = currentGameSpeed,
+                    isSoundEnabled = isSoundEnabled,
                     onBackToMenu = {
                         backStack.removeLastOrNull()
                     },
@@ -89,11 +92,25 @@ fun MainNavigation() {
             entry<SettingsKey> {
                 SettingsScreen(
                     currentPaletteType = currentPaletteType,
-                    onPaletteTypeChange = { currentPaletteType = it },
+                    onPaletteTypeChange = { 
+                        currentPaletteType = it 
+                        levelManager.savePaletteType(it)
+                    },
+                    currentGameSpeed = currentGameSpeed,
+                    onGameSpeedChange = {
+                        currentGameSpeed = it
+                        levelManager.saveGameSpeed(it)
+                    },
                     showCrtScanlines = showCrtScanlines,
-                    onToggleCrtScanlines = { showCrtScanlines = it },
+                    onToggleCrtScanlines = { 
+                        showCrtScanlines = it 
+                        levelManager.saveCrtScanlines(it)
+                    },
                     isSoundEnabled = isSoundEnabled,
-                    onToggleSound = { isSoundEnabled = it },
+                    onToggleSound = { 
+                        isSoundEnabled = it 
+                        levelManager.saveSoundEnabled(it)
+                    },
                     palette = palette,
                     onBack = { backStack.removeLastOrNull() },
                     modifier = Modifier.fillMaxSize()

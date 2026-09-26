@@ -15,11 +15,7 @@ data class LevelData(
         const val COLS = 28
         const val ROWS = 16
 
-        /**
-         * Parses a 16-line ASCII string representation into LevelData.
-         */
-        fun fromAscii(id: Int, name: String, ascii: String): LevelData {
-            val lines = ascii.trimIndent().lines().filter { it.isNotBlank() }
+        fun fromLines(id: Int, name: String, lines: List<String>): LevelData {
             val grid = Array(ROWS) { IntArray(COLS) { TileType.EMPTY.id } }
             var runnerX = 14
             var runnerY = 14
@@ -35,7 +31,7 @@ data class LevelData(
                             runnerY = r
                             grid[r][c] = TileType.EMPTY.id
                         }
-                        'M' -> {
+                        'M', '0' -> {
                             enemySpawns.add(Pair(c, r))
                             grid[r][c] = TileType.EMPTY.id
                         }
@@ -54,6 +50,14 @@ data class LevelData(
                 runnerStartY = runnerY,
                 enemySpawns = enemySpawns
             )
+        }
+
+        /**
+         * Parses a 16-line ASCII string representation into LevelData.
+         */
+        fun fromAscii(id: Int, name: String, ascii: String): LevelData {
+            val lines = ascii.trimIndent().lines().filter { it.isNotBlank() }
+            return fromLines(id, name, lines)
         }
     }
 

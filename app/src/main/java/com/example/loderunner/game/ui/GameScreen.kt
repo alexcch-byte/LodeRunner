@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +53,8 @@ fun GameScreen(
     levelManager: LevelManager,
     palette: GamePalette,
     showCrtScanlines: Boolean,
+    gameSpeed: com.example.loderunner.game.model.GameSpeed = com.example.loderunner.game.model.GameSpeed.NORMAL,
+    isSoundEnabled: Boolean = true,
     onBackToMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -59,7 +64,18 @@ fun GameScreen(
     val focusRequester = remember { FocusRequester() }
 
     val engine = remember {
-        GameEngine()
+        GameEngine().apply {
+            this.gameSpeed = gameSpeed
+            this.soundFx.isSoundEnabled = isSoundEnabled
+        }
+    }
+
+    LaunchedEffect(gameSpeed) {
+        engine.gameSpeed = gameSpeed
+    }
+
+    LaunchedEffect(isSoundEnabled) {
+        engine.soundFx.isSoundEnabled = isSoundEnabled
     }
 
     // Immersive mode while playing: hide status/nav bars to give the playfield the full screen height.
@@ -196,40 +212,43 @@ fun GameScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                val minSideWidth = (maxWidth * 0.16f).coerceAtLeast(140.dp)
-                val playfieldAspect = LevelData.COLS.toFloat() / LevelData.ROWS
-                val canvasWidth = minOf(maxWidth - minSideWidth * 2, maxHeight * playfieldAspect)
+                val minSideWidth = (maxWidth * 0.18f).coerceAtLeast(125.dp)
+                // A framed 4:3 retro arcade monitor for the zoomed scrolling viewport:
+                val maxAllowedWidth = maxWidth - minSideWidth * 2
+                val targetAspect = 1.333f // Classic 4:3 arcade monitor aspect
+                val canvasWidth = minOf(maxAllowedWidth, (maxHeight - 12.dp) * targetAspect)
                 val sideWidth = (maxWidth - canvasWidth) / 2
-                // D-pad is ~3 buttons wide plus padding; dig buttons stack vertically when narrow
-                val dpadButtonSize = ((sideWidth - 16.dp) / 3).coerceIn(40.dp, 64.dp)
-                val digButtonSize = (sideWidth - 20.dp).coerceIn(56.dp, 76.dp)
-                val stackDigButtons = sideWidth < digButtonSize * 2 + 40.dp
+                val thumbstickSize = (sideWidth - 16.dp).coerceIn(105.dp, 150.dp)
+                val digButtonSize = (sideWidth - 20.dp).coerceIn(54.dp, 72.dp)
+                val stackDigButtons = sideWidth < digButtonSize * 2 + 30.dp
 
                 Row(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left Bezel: D-Pad
+                    // Left Bezel: Virtual Analog Thumbstick
                     Box(
                         modifier = Modifier
                             .width(sideWidth)
                             .fillMaxHeight(),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Opt the D-pad out of the edge back-swipe gesture so presses aren't stolen
-                        TabletDpad(
+                        // Opt the thumbstick out of the edge back-swipe gesture so drags aren't stolen
+                        TabletThumbstick(
                             onDirectionChange = { dir -> engine.setInputDirection(dir) },
                             palette = palette,
-                            buttonSize = dpadButtonSize,
+                            size = thumbstickSize,
                             modifier = Modifier.systemGestureExclusion()
                         )
                     }
 
-                    // Center: Retro Canvas (28x16 grid)
+                    // Center: Retro Canvas (Framed 4:3 Scrolling Monitor)
                     Box(
                         modifier = Modifier
                             .width(canvasWidth)
-                            .fillMaxHeight(),
+                            .fillMaxHeight()
+                            .padding(vertical = 6.dp)
+                            .clip(RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         GameCanvas(
